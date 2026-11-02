@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Navbar } from '@/components/Navbar';
-import { NetWorthCard } from '@/components/NetWorthCard';
-import { MonveoBentoGrid } from '@/components/MonveoBentoGrid';
+import { MonveoHeader } from '@/components/MonveoHeader';
+import { MonveoSummarySection } from '@/components/MonveoSummarySection';
+import { FloatingBottomDock, MonveoTab } from '@/components/FloatingBottomDock';
+import { DraftTransactionsModal, DraftTransaction } from '@/components/DraftTransactionsModal';
+import { AddCategoryModal } from '@/components/AddCategoryModal';
 import { AccountsList } from '@/components/AccountsList';
-import { BudgetCards } from '@/components/BudgetCards';
 import { TransactionList } from '@/components/TransactionList';
 import { VoiceInputModal } from '@/components/VoiceInputModal';
 import { ReceiptScanModal } from '@/components/ReceiptScanModal';
@@ -14,63 +15,74 @@ import {
   INITIAL_ACCOUNTS,
   INITIAL_BUDGETS,
   INITIAL_CATEGORIES,
-  INITIAL_GOALS,
   INITIAL_SPACES,
   INITIAL_TRANSACTIONS
 } from '@/lib/mockData';
-import { Account, Budget, Category, Goal, Space, Transaction } from '@/types/rea';
+import { INITIAL_DRAFTS } from '@/lib/mockDrafts';
+import { Account, Budget, Category, FlowType, Space, Transaction } from '@/types/rea';
 import { ParsedTransaction } from '@/lib/nlpParser';
-import { Sparkles, Layers, History, Shield, Smartphone, ArrowRight } from 'lucide-react';
 
 export default function Home() {
+  const [activeTab, setActiveTab] = useState<MonveoTab>('home');
   const [spaces, setSpaces] = useState<Space[]>(INITIAL_SPACES);
   const [currentSpaceId, setCurrentSpaceId] = useState<string>('space_personal');
   const [accounts, setAccounts] = useState<Account[]>(INITIAL_ACCOUNTS);
   const [categories, setCategories] = useState<Category[]>(INITIAL_CATEGORIES);
   const [budgets, setBudgets] = useState<Budget[]>(INITIAL_BUDGETS);
-  const [goals, setGoals] = useState<Goal[]>(INITIAL_GOALS);
   const [transactions, setTransactions] = useState<Transaction[]>(INITIAL_TRANSACTIONS);
+  const [drafts, setDrafts] = useState<DraftTransaction[]>(INITIAL_DRAFTS);
 
-  // Modals state
+  // Modals
+  const [isDraftsOpen, setIsDraftsOpen] = useState(false);
+  const [isAddCategoryOpen, setIsAddCategoryOpen] = useState(false);
   const [isVoiceOpen, setIsVoiceOpen] = useState(false);
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
   const [isAddOpen, setIsAddOpen] = useState(false);
 
-  // Active Tab
-  const [activeTab, setActiveTab] = useState<'overview' | 'accounts' | 'transactions' | 'budgets'>('overview');
+  // Total expense calculation
+  const totalExpense = transactions
+    .filter((t) => t.eventType === 'expense' && t.spaceId === currentSpaceId)
+    .reduce((sum, t) => sum + t.amount, 0);
 
-  // Load from LocalStorage if available
+  // Load from LocalStorage
   useEffect(() => {
     try {
-      const savedTxs = localStorage.getItem('trackdoit_transactions');
+      const savedTxs = localStorage.getItem('trackdoit_transactions_v2');
       if (savedTxs) setTransactions(JSON.parse(savedTxs));
 
-      const savedAccounts = localStorage.getItem('trackdoit_accounts');
+      const savedAccounts = localStorage.getItem('trackdoit_accounts_v2');
       if (savedAccounts) setAccounts(JSON.parse(savedAccounts));
+
+      const savedDrafts = localStorage.getItem('trackdoit_drafts_v2');
+      if (savedDrafts) setDrafts(JSON.parse(savedDrafts));
     } catch (e) {
-      console.warn('LocalStorage not accessible', e);
+      console.warn('LocalStorage error', e);
     }
   }, []);
 
-  // Save to LocalStorage
-  const saveState = (newTxs: Transaction[], newAccs: Account[]) => {
+  const saveState = (
+    newTxs: Transaction[],
+    newAccs: Account[],
+    newDrafts: DraftTransaction[] = drafts
+  ) => {
     setTransactions(newTxs);
     setAccounts(newAccs);
+    setDrafts(newDrafts);
     try {
-      localStorage.setItem('trackdoit_transactions', JSON.stringify(newTxs));
-      localStorage.setItem('trackdoit_accounts', JSON.stringify(newAccs));
+      localStorage.setItem('trackdoit_transactions_v2', JSON.stringify(newTxs));
+      localStorage.setItem('trackdoit_accounts_v2', JSON.stringify(newAccs));
+      localStorage.setItem('trackdoit_drafts_v2', JSON.stringify(newDrafts));
     } catch (e) {
-      console.warn('Error saving to LocalStorage', e);
+      console.warn('LocalStorage save error', e);
     }
   };
 
-  // Helper to apply balance delta based on REA Duality
+  // REA Balance Update Helper
   const applyTransactionBalances = (
     tx: Omit<Transaction, 'id' | 'timestamp'>,
     prevAccounts: Account[]
   ): Account[] => {
     return prevAccounts.map((acc) => {
-      // Source Account (Resource Decrement / Liability Increment)
       if (tx.sourceAccountId && acc.id === tx.sourceAccountId) {
         if (acc.isLiability) {
           return { ...acc, balance: acc.balance + tx.amount };
@@ -79,7 +91,6 @@ export default function Home() {
         }
       }
 
-      // Destination Account (Resource Increment)
       if (tx.destinationAccountId && acc.id === tx.destinationAccountId) {
         if (acc.isLiability) {
           return { ...acc, balance: Math.max(0, acc.balance - tx.amount) };
@@ -92,7 +103,7 @@ export default function Home() {
     });
   };
 
-  // Handle Manual Transaction
+  // Add Transaction
   const handleAddTransaction = (newTxData: Omit<Transaction, 'id' | 'timestamp'>) => {
     const newTx: Transaction = {
       ...newTxData,
@@ -104,15 +115,109 @@ export default function Home() {
     saveState([newTx, ...transactions], updatedAccounts);
   };
 
-  // Handle Voice AI Input
+  // Handle Approve One Draft
+  const handleApproveDraft = (draft: DraftTransaction) => {
+    const matchedAccount =
+      accounts.find((a) => a.name.toLowerCase().includes(draft.sourceAccount.toLowerCase())) ||
+      accounts[0];
+
+    const matchedCategory =
+      categories.find((c) => c.name.toLowerCase().includes(draft.category.toLowerCase())) ||
+      categories[0];
+
+    const newTxData: Omit<Transaction, 'id' | 'timestamp'> = {
+      spaceId: currentSpaceId,
+      actorUserId: 'usr_thowaf_01',
+      merchantName: draft.merchant,
+      sourceAccountId: matchedAccount.id,
+      categoryId: matchedCategory.id,
+      eventType: 'expense',
+      amount: draft.amount,
+      currency: 'IDR',
+      entryChannel: draft.channel,
+      note: `Disetujui dari draft: ${draft.merchant}`
+    };
+
+    const remainingDrafts = drafts.filter((d) => d.id !== draft.id);
+    const updatedAccounts = applyTransactionBalances(newTxData, accounts);
+    const newTx: Transaction = {
+      ...newTxData,
+      id: `tx_${Date.now()}`,
+      timestamp: new Date().toISOString()
+    };
+
+    saveState([newTx, ...transactions], updatedAccounts, remainingDrafts);
+  };
+
+  // Handle Approve All Drafts
+  const handleApproveAllDrafts = () => {
+    let currentAccs = [...accounts];
+    const newTxs: Transaction[] = [];
+
+    drafts.forEach((d, idx) => {
+      const matchedAccount =
+        currentAccs.find((a) => a.name.toLowerCase().includes(d.sourceAccount.toLowerCase())) ||
+        currentAccs[0];
+
+      const matchedCategory =
+        categories.find((c) => c.name.toLowerCase().includes(d.category.toLowerCase())) ||
+        categories[0];
+
+      const txData: Omit<Transaction, 'id' | 'timestamp'> = {
+        spaceId: currentSpaceId,
+        actorUserId: 'usr_thowaf_01',
+        merchantName: d.merchant,
+        sourceAccountId: matchedAccount.id,
+        categoryId: matchedCategory.id,
+        eventType: 'expense',
+        amount: d.amount,
+        currency: 'IDR',
+        entryChannel: d.channel,
+        note: `Disetujui massal dari draft`
+      };
+
+      currentAccs = applyTransactionBalances(txData, currentAccs);
+      newTxs.push({
+        ...txData,
+        id: `tx_mass_${Date.now()}_${idx}`,
+        timestamp: new Date().toISOString()
+      });
+    });
+
+    saveState([...newTxs, ...transactions], currentAccs, []);
+    setIsDraftsOpen(false);
+  };
+
+  // Delete draft
+  const handleDeleteDraft = (id: string) => {
+    const updated = drafts.filter((d) => d.id !== id);
+    setDrafts(updated);
+    try {
+      localStorage.setItem('trackdoit_drafts_v2', JSON.stringify(updated));
+    } catch (e) {
+      console.warn(e);
+    }
+  };
+
+  // Add Category
+  const handleAddCategory = (newCat: { name: string; flowType: FlowType; color: string }) => {
+    const cat: Category = {
+      id: `cat_${Date.now()}`,
+      name: newCat.name,
+      flowType: newCat.flowType,
+      color: newCat.color,
+      icon: 'Tag'
+    };
+    setCategories([...categories, cat]);
+  };
+
+  // Confirm Voice
   const handleConfirmVoice = (parsed: ParsedTransaction) => {
-    // Map account name to existing account
     const matchedAccount =
       accounts.find((a) =>
         a.name.toLowerCase().includes(parsed.accountName?.toLowerCase() || '')
       ) || accounts[0];
 
-    // Map category
     const matchedCategory =
       categories.find((c) =>
         c.name.toLowerCase().includes(parsed.categoryName?.toLowerCase() || '')
@@ -129,13 +234,13 @@ export default function Home() {
       amount: parsed.amount,
       currency: 'IDR',
       entryChannel: 'voice_ai',
-      note: `Input suara: "${parsed.rawText}"`
+      note: `Voice AI: "${parsed.rawText}"`
     };
 
     handleAddTransaction(newTxData);
   };
 
-  // Handle OCR Receipt Confirmation
+  // Confirm Receipt OCR
   const handleConfirmReceipt = (data: {
     amount: number;
     merchantName: string;
@@ -164,149 +269,83 @@ export default function Home() {
     handleAddTransaction(newTxData);
   };
 
-  // Handle Delete Transaction
-  const handleDeleteTransaction = (id: string) => {
-    const filtered = transactions.filter((t) => t.id !== id);
-    saveState(filtered, accounts);
-  };
-
-  // Filter items by active space
   const currentTransactions = transactions.filter((t) => t.spaceId === currentSpaceId);
   const currentAccounts = accounts.filter((a) => a.spaceId === currentSpaceId);
-  const currentBudgets = budgets.filter((b) => b.spaceId === currentSpaceId);
 
   return (
-    <div className="min-h-screen bg-black text-zinc-100 flex flex-col font-sans selection:bg-emerald-500 selection:text-black">
-      {/* Top Navbar */}
-      <Navbar
-        spaces={spaces}
-        currentSpaceId={currentSpaceId}
-        onSelectSpace={setCurrentSpaceId}
-        onOpenVoice={() => setIsVoiceOpen(true)}
-        onOpenReceipt={() => setIsReceiptOpen(true)}
-        onOpenAdd={() => setIsAddOpen(true)}
-      />
-
-      {/* Main Container */}
-      <main className="flex-1 max-w-5xl w-full mx-auto px-4 py-6 sm:py-8 space-y-8">
-        {/* Monveo Bento Grid & Command Center */}
-        <MonveoBentoGrid
-          accounts={currentAccounts}
-          transactions={currentTransactions}
-          spaces={spaces}
-          currentSpaceId={currentSpaceId}
-          onSelectSpace={setCurrentSpaceId}
-          goals={goals}
-          onOpenVoice={() => setIsVoiceOpen(true)}
-          onOpenReceipt={() => setIsReceiptOpen(true)}
+    <div className="min-h-screen bg-black text-white font-sans antialiased selection:bg-rose-500 selection:text-white">
+      {/* Mobile-Frame Layout matching iPhone proportions */}
+      <div className="max-w-md mx-auto min-h-screen px-4 pt-3 pb-32 flex flex-col space-y-4 relative">
+        {/* Top Header: TW F Avatar + Home + Bell */}
+        <MonveoHeader
+          initials="TW\nF"
+          title={activeTab === 'home' ? 'Home' : activeTab === 'history' ? 'Riwayat' : 'Akun & Kartu'}
+          onNotificationClick={() => alert('Tidak ada notifikasi baru.')}
+          onProfileClick={() => alert('Profil: Thowaf Hasan (thowafhasan@gmail.com)')}
         />
 
-        {/* Segmented Tab Navigation (iOS Monveo Style) */}
-        <div className="flex items-center justify-center">
-          <div className="flex items-center p-1 rounded-2xl bg-zinc-900 border border-zinc-800 text-xs font-semibold">
-            {[
-              { id: 'overview', label: 'Ringkasan' },
-              { id: 'accounts', label: 'Akun (Resources)' },
-              { id: 'transactions', label: 'Transaksi (Events)' },
-              { id: 'budgets', label: 'Anggaran' }
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
-                className={`px-4 py-2 rounded-xl transition ${
-                  activeTab === tab.id
-                    ? 'bg-zinc-800 text-zinc-100 shadow-sm'
-                    : 'text-zinc-400 hover:text-zinc-200'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Tab Content */}
-        {activeTab === 'overview' && (
-          <div className="space-y-8 animate-fade-in">
-            {/* Quick Ingestion Banner */}
-            <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-emerald-950/40 via-zinc-900 to-zinc-900 border border-emerald-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center shrink-0">
-                  <Sparkles className="w-5 h-5" />
-                </div>
-                <div>
-                  <h4 className="text-sm font-bold text-zinc-100">Frictionless Voice & Receipt Tracking</h4>
-                  <p className="text-xs text-zinc-400">
-                    Coba ucapkan: &ldquo;Beli kopi starbucks 65rb pakai gopay&rdquo; atau unggah setruk belanja!
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
-                <button
-                  onClick={() => setIsVoiceOpen(true)}
-                  className="px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-bold transition shadow-sm"
-                >
-                  Coba Suara
-                </button>
-                <button
-                  onClick={() => setIsReceiptOpen(true)}
-                  className="px-3.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium border border-zinc-700 transition"
-                >
-                  Scan Struk
-                </button>
-              </div>
-            </div>
-
-            {/* Resources (Accounts) */}
-            <AccountsList accounts={currentAccounts} />
-
-            {/* Budgets */}
-            <BudgetCards budgets={currentBudgets} categories={categories} />
-
-            {/* Events (Transactions) */}
-            <TransactionList
-              transactions={currentTransactions}
-              categories={categories}
-              accounts={currentAccounts}
-              onDeleteTransaction={handleDeleteTransaction}
+        {/* Tab 1: Home Screen (100% Identik Screenshot iPhone Monveo) */}
+        {activeTab === 'home' && (
+          <div className="animate-fade-in space-y-5">
+            <MonveoSummarySection
+              totalExpense={totalExpense}
+              draftCount={drafts.length}
+              onOpenDrafts={() => setIsDraftsOpen(true)}
+              onOpenImport={() => setIsReceiptOpen(true)}
+              onOpenInsight={() => alert('Fitur Insight: Pengeluaran Anda minggu ini terkendali dengan baik.')}
+              onOpenConsultation={() => alert('Konsultasi Keuangan 1-on-1 dengan Certified Financial Planner (Segera Hadir).')}
+              onOpenSubscription={() => alert('Subscription: Kelola langganan berulang bulanan Anda.')}
+              onAddCategory={() => setIsAddCategoryOpen(true)}
             />
           </div>
         )}
 
-        {activeTab === 'accounts' && (
-          <div className="animate-fade-in">
-            <AccountsList accounts={currentAccounts} />
-          </div>
-        )}
-
-        {activeTab === 'transactions' && (
-          <div className="animate-fade-in">
+        {/* Tab 2: History (Riwayat Transaksi) */}
+        {activeTab === 'history' && (
+          <div className="animate-fade-in space-y-4">
             <TransactionList
               transactions={currentTransactions}
               categories={categories}
               accounts={currentAccounts}
-              onDeleteTransaction={handleDeleteTransaction}
+              onDeleteTransaction={(id) => {
+                const updated = transactions.filter((t) => t.id !== id);
+                saveState(updated, accounts);
+              }}
             />
           </div>
         )}
 
-        {activeTab === 'budgets' && (
-          <div className="animate-fade-in">
-            <BudgetCards budgets={currentBudgets} categories={categories} />
+        {/* Tab 4: Cards / Accounts */}
+        {activeTab === 'cards' && (
+          <div className="animate-fade-in space-y-4">
+            <AccountsList accounts={currentAccounts} />
           </div>
         )}
-      </main>
+      </div>
 
-      {/* Footer */}
-      <footer className="mt-auto border-t border-zinc-800/60 py-6 text-center text-xs text-zinc-500">
-        <p>
-          <strong className="text-zinc-400">Track Do It</strong> &bull; Expense Tracker berbasis arsitektur REA
-          (Resource-Event-Agent) &bull; Dibuat untuk Thowaf Hasan
-        </p>
-      </footer>
+      {/* Floating Bottom Dock (Glass Capsule Navbar) */}
+      <FloatingBottomDock
+        activeTab={activeTab}
+        onSelectTab={setActiveTab}
+        onQuickAdd={() => setIsAddOpen(true)}
+      />
 
-      {/* Interactive Modals */}
+      {/* Modals & Triggers */}
+      <DraftTransactionsModal
+        isOpen={isDraftsOpen}
+        onClose={() => setIsDraftsOpen(false)}
+        drafts={drafts}
+        onApprove={handleApproveDraft}
+        onApproveAll={handleApproveAllDrafts}
+        onDeleteDraft={handleDeleteDraft}
+      />
+
+      <AddCategoryModal
+        isOpen={isAddCategoryOpen}
+        onClose={() => setIsAddCategoryOpen(false)}
+        onAddCategory={handleAddCategory}
+      />
+
       <VoiceInputModal
         isOpen={isVoiceOpen}
         onClose={() => setIsVoiceOpen(false)}
