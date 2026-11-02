@@ -231,16 +231,16 @@ export function VoiceInputModal({ isOpen, onClose, onConfirm }: VoiceInputModalP
               </div>
             </div>
 
-            <button
-              onClick={() => {
-                onConfirm(parsedResult);
-                onClose();
-              }}
-              className="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold text-sm shadow-lg shadow-emerald-500/20 transition flex items-center justify-center gap-2 active:scale-95"
-            >
-              <Check className="w-4 h-4" />
-              <span>Simpan ke Transaksi Sekarang</span>
-            </button>
+              <button
+                onClick={() => {
+                  onConfirm(parsedResult);
+                  onClose();
+                }}
+                className="w-full py-3.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-zinc-950 font-extrabold text-sm shadow-xl shadow-emerald-500/20 transition flex items-center justify-center gap-2 active:scale-95"
+              >
+                <Check className="w-4 h-4" />
+                <span>Simpan Transaksi Langsung (&lt; 5 Detik)</span>
+              </button>
           </div>
         )}
       </div>

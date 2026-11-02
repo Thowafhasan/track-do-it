@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Navbar } from '@/components/Navbar';
 import { NetWorthCard } from '@/components/NetWorthCard';
+import { MonveoBentoGrid } from '@/components/MonveoBentoGrid';
 import { AccountsList } from '@/components/AccountsList';
 import { BudgetCards } from '@/components/BudgetCards';
 import { TransactionList } from '@/components/TransactionList';
@@ -13,10 +14,11 @@ import {
   INITIAL_ACCOUNTS,
   INITIAL_BUDGETS,
   INITIAL_CATEGORIES,
+  INITIAL_GOALS,
   INITIAL_SPACES,
   INITIAL_TRANSACTIONS
 } from '@/lib/mockData';
-import { Account, Budget, Category, Space, Transaction } from '@/types/rea';
+import { Account, Budget, Category, Goal, Space, Transaction } from '@/types/rea';
 import { ParsedTransaction } from '@/lib/nlpParser';
 import { Sparkles, Layers, History, Shield, Smartphone, ArrowRight } from 'lucide-react';
 
@@ -26,6 +28,7 @@ export default function Home() {
   const [accounts, setAccounts] = useState<Account[]>(INITIAL_ACCOUNTS);
   const [categories, setCategories] = useState<Category[]>(INITIAL_CATEGORIES);
   const [budgets, setBudgets] = useState<Budget[]>(INITIAL_BUDGETS);
+  const [goals, setGoals] = useState<Goal[]>(INITIAL_GOALS);
   const [transactions, setTransactions] = useState<Transaction[]>(INITIAL_TRANSACTIONS);
 
   // Modals state
@@ -186,8 +189,17 @@ export default function Home() {
 
       {/* Main Container */}
       <main className="flex-1 max-w-5xl w-full mx-auto px-4 py-6 sm:py-8 space-y-8">
-        {/* Hero Section: Net Worth Card */}
-        <NetWorthCard accounts={currentAccounts} transactions={currentTransactions} />
+        {/* Monveo Bento Grid & Command Center */}
+        <MonveoBentoGrid
+          accounts={currentAccounts}
+          transactions={currentTransactions}
+          spaces={spaces}
+          currentSpaceId={currentSpaceId}
+          onSelectSpace={setCurrentSpaceId}
+          goals={goals}
+          onOpenVoice={() => setIsVoiceOpen(true)}
+          onOpenReceipt={() => setIsReceiptOpen(true)}
+        />
 
         {/* Segmented Tab Navigation (iOS Monveo Style) */}
         <div className="flex items-center justify-center">

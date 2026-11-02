@@ -72,6 +72,16 @@ export interface Budget {
   period: 'monthly' | 'weekly';
 }
 
+export interface Goal {
+  id: string;
+  spaceId: string;
+  title: string;
+  targetAmount: number;
+  currentAmount: number;
+  targetDate: string; // e.g. "Dec 2026"
+  icon: string;
+}
+
 // EVENTS
 export interface Transaction {
   id: string;

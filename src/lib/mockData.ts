@@ -1,6 +1,6 @@
 // Mock Data & Storage Manager implementing REA Ontology
 
-import { Account, Category, Space, Transaction, User, Budget } from '@/types/rea';
+import { Account, Category, Space, Transaction, User, Budget, Goal } from '@/types/rea';
 
 export const INITIAL_USER: User = {
   id: 'usr_thowaf_01',
@@ -13,17 +13,52 @@ export const INITIAL_USER: User = {
 export const INITIAL_SPACES: Space[] = [
   {
     id: 'space_personal',
-    name: 'Personal Finance',
+    name: 'Personal',
     type: 'personal',
     ownerId: INITIAL_USER.id,
     currency: 'IDR'
   },
   {
     id: 'space_shared',
-    name: 'Household & Travel (Shared)',
+    name: 'Shared (Household)',
     type: 'shared',
     ownerId: INITIAL_USER.id,
     currency: 'IDR'
+  },
+  {
+    id: 'space_business',
+    name: 'Business',
+    type: 'personal',
+    ownerId: INITIAL_USER.id,
+    currency: 'IDR'
+  },
+  {
+    id: 'space_travel',
+    name: 'Travel & Trips',
+    type: 'personal',
+    ownerId: INITIAL_USER.id,
+    currency: 'IDR'
+  }
+];
+
+export const INITIAL_GOALS: Goal[] = [
+  {
+    id: 'goal_emergency',
+    spaceId: 'space_personal',
+    title: 'Emergency Fund',
+    targetAmount: 50000000,
+    currentAmount: 36000000,
+    targetDate: 'Dec 2026',
+    icon: 'ShieldCheck'
+  },
+  {
+    id: 'goal_travel',
+    spaceId: 'space_personal',
+    title: 'Liburan Jepang',
+    targetAmount: 30000000,
+    currentAmount: 14500000,
+    targetDate: 'Aug 2027',
+    icon: 'Plane'
   }
 ];
 
@@ -138,6 +173,20 @@ export const INITIAL_BUDGETS: Budget[] = [
 
 export const INITIAL_TRANSACTIONS: Transaction[] = [
   {
+    id: 'tx_today_tuku',
+    spaceId: 'space_personal',
+    actorUserId: INITIAL_USER.id,
+    merchantName: 'Kopi Tuku',
+    sourceAccountId: 'acc_gopay',
+    categoryId: 'cat_fnb',
+    eventType: 'expense',
+    amount: 38000,
+    currency: 'IDR',
+    timestamp: '2026-11-02T13:45:00.000Z',
+    entryChannel: 'voice_ai',
+    note: 'Es Kopi Susu Tetangga (Voice capture < 5s)'
+  },
+  {
     id: 'tx_01',
     spaceId: 'space_personal',
     actorUserId: INITIAL_USER.id,
@@ -147,7 +196,7 @@ export const INITIAL_TRANSACTIONS: Transaction[] = [
     eventType: 'expense',
     amount: 68000,
     currency: 'IDR',
-    timestamp: new Date(Date.now() - 1000 * 60 * 45).toISOString(), // 45 mins ago
+    timestamp: '2026-11-02T11:15:00.000Z',
     entryChannel: 'voice_ai',
     note: 'Iced Caramel Macchiato oatmilk'
   },
@@ -161,7 +210,7 @@ export const INITIAL_TRANSACTIONS: Transaction[] = [
     eventType: 'expense',
     amount: 142500,
     currency: 'IDR',
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 3).toISOString(), // 3 hours ago
+    timestamp: '2026-11-02T09:30:00.000Z',
     entryChannel: 'ocr',
     note: 'Kebutuhan mingguan & camilan'
   },
@@ -175,7 +224,7 @@ export const INITIAL_TRANSACTIONS: Transaction[] = [
     eventType: 'income',
     amount: 25000000,
     currency: 'IDR',
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString(), // 2 days ago
+    timestamp: '2026-10-31T08:00:00.000Z',
     entryChannel: 'manual',
     note: 'Gaji Bulanan & Tunjangan'
   },
@@ -189,7 +238,7 @@ export const INITIAL_TRANSACTIONS: Transaction[] = [
     eventType: 'transfer',
     amount: 500000,
     currency: 'IDR',
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3).toISOString(),
+    timestamp: '2026-10-30T10:00:00.000Z',
     entryChannel: 'shortcut',
     note: 'Top up GoPay mingguan'
   }
